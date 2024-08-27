@@ -51,6 +51,7 @@ import java.util.Optional;
 public final class GryoRecordReader extends RecordReader<NullWritable, VertexWritable> {
 
     private FSDataInputStream inputStream;
+    private BufferedFSDataInputStream bufferedInputStream;
 
     private static final byte[] PATTERN = GryoMapper.HEADER;
     private static final byte[] TERMINATOR = VertexTerminator.instance().terminal;
@@ -81,6 +82,7 @@ public final class GryoRecordReader extends RecordReader<NullWritable, VertexWri
         }
         // open the file and seek to the start of the split
         this.inputStream = file.getFileSystem(configuration).open(split.getPath());
+        this.bufferedInputStream = new BufferedFSDataInputStream(this.inputStream);
         this.splitLength = split.getLength();
         if (this.splitLength > 0) this.splitLength -= (seekToHeader(this.inputStream, start) - start);
     }
@@ -88,24 +90,27 @@ public final class GryoRecordReader extends RecordReader<NullWritable, VertexWri
     private static long seekToHeader(final FSDataInputStream inputStream, final long start) throws IOException {
         inputStream.seek(start);
         long nextStart = start;
-        final byte[] buffer = new byte[PATTERN.length];
+        final byte[] buffer = new byte[65536];
+        final int patternLength = PATTERN.length;
+        int bytesRead;
+
         while (true) {
-            if ((buffer[0] = PATTERN[0]) == inputStream.readByte()) {
-                inputStream.read(nextStart + 1, buffer, 1, PATTERN.length - 1);
-                if (patternMatch(buffer)) {
-                    inputStream.seek(nextStart);
-                    return nextStart;
+            bytesRead = inputStream.read(buffer);
+            for (int i = 0; i < bytesRead - patternLength + 1; i++) {
+                if (buffer[i] == PATTERN[0] && patternMatch(buffer, i)) {
+                    long foundPosition = nextStart + i;
+                    inputStream.seek(foundPosition);
+                    return foundPosition;
                 }
-            } else {
-                nextStart = nextStart + 1;
-                inputStream.seek(nextStart);
             }
+            nextStart += bytesRead - patternLength + 1;
+            inputStream.seek(nextStart);
         }
     }
 
-    private static boolean patternMatch(final byte[] bytes) {
+    private static boolean patternMatch(final byte[] bytes, final int offset) {
         for (int i = 0; i < PATTERN.length - 1; i++) {
-            if (bytes[i] != PATTERN[i])
+            if (bytes[i + offset] != PATTERN[i])
                 return false;
         }
         return true;
@@ -120,7 +125,7 @@ public final class GryoRecordReader extends RecordReader<NullWritable, VertexWri
         long currentVertexLength = 0;
         int terminatorLocation = 0;
         while (true) {
-            final int currentByte = this.inputStream.read();
+            final int currentByte = this.bufferedInputStream.read();
             if (-1 == currentByte) {
                 if (currentVertexLength > 0)
                     throw new IllegalStateException("Remainder of stream exhausted without matching a vertex");
@@ -169,3 +174,34 @@ public final class GryoRecordReader extends RecordReader<NullWritable, VertexWri
         this.gryoReader = null;
     }
 }
+
+class BufferedFSDataInputStream {
+    private FSDataInputStream inputStream;
+    private int cursor;
+    private int max;
+    private byte[] buf = new byte[16 * 1024];
+
+    public BufferedFSDataInputStream(FSDataInputStream i) {
+        inputStream = i;
+        cursor = 0;
+        max = 0;
+    }
+
+    public int read() throws IOException {
+        if (cursor >= max) {
+            cursor = 0;
+            max = inputStream.read(buf);
+        }
+
+        if (max == -1) {
+            return -1;
+        }
+
+        byte b = buf[cursor];
+        cursor += 1;
+
+        return b & 0xFF;
+    }
+}
+
+
