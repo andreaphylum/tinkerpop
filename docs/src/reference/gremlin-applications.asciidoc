@@ -224,7 +224,6 @@ The following Gremlin Console session demonstrates the basics of these features:
 ----
 gremlin> :plugin list  <1>
 ==>tinkerpop.server[active]
-==>tinkerpop.gephi
 ==>tinkerpop.utilities[active]
 ==>tinkerpop.sugar
 ==>tinkerpop.tinkergraph[active]
@@ -234,7 +233,6 @@ gremlin> :install org.apache.tinkerpop neo4j-gremlin x.y.z  <3>
 ==>loaded: [org.apache.tinkerpop, neo4j-gremlin, x.y.z]
 gremlin> :plugin list <4>
 ==>tinkerpop.server[active]
-==>tinkerpop.gephi
 ==>tinkerpop.utilities[active]
 ==>tinkerpop.sugar
 ==>tinkerpop.tinkergraph[active]
@@ -243,7 +241,6 @@ gremlin> :plugin use tinkerpop.neo4j <5>
 ==>tinkerpop.neo4j activated
 gremlin> :plugin list <6>
 ==>tinkerpop.server[active]
-==>tinkerpop.gephi
 ==>tinkerpop.sugar[active]
 ==>tinkerpop.utilities[active]
 ==>tinkerpop.neo4j[active]
@@ -2392,147 +2389,6 @@ gremlin> :plugin use tinkerpop.credentials
 
 This plugin imports the appropriate classes for managing the credentials graph.
 
-[[gephi-plugin]]
-=== Gephi Plugin
-
-image:gephi-logo.png[width=200, float=left] link:http://gephi.org/[Gephi] is an interactive visualization,
-exploration, and analysis platform for graphs. The link:https://gephi.org/plugins/#/plugin/graphstreaming[Graph Streaming]
-plugin for Gephi provides an API that can be leveraged to stream graph data to a running Gephi application. The Gephi
-plugin for Gremlin Console utilizes this API to allow for graph and traversal visualization.
-
-IMPORTANT: These instructions have been tested with Gephi 0.9.2 and Graph Streaming plugin 1.0.3.
-
-The following instructions assume that Gephi has been download and installed.  It further assumes that the Graph
-Streaming plugin has been installed (`Tools > Plugins`). The following instructions explain how to visualize a
-`Graph` and `Traversal`.
-
-In Gephi, create a new project with `File > New Project`.  In the lower left view, click the "Streaming" tab, open the
-Master drop down, and right click `Master Server > Start` which starts the Graph Streaming server in Gephi and by
-default accepts requests at `http://localhost:8080/workspace1`:
-
-image::gephi-start-server.png[width=800]
-
-IMPORTANT: The Gephi Streaming Plugin doesn't detect port conflicts and will appear to start the plugin successfully
-even if there is something already active on that port it wants to connect to (which is 8080 by default).  Be sure
-that there is nothing running on the port before Gephi will be using before starting the plugin.  Failing to do
-this produce behavior where the console will appear to submit requests to Gephi successfully but nothing will
-render.
-
-WARNING: Do not skip the `File > New Project` step as it may prevent a newly started Gephi application from fully
-enabling the streaming tab.
-
-Start the xref:gremlin-console[Gremlin Console] and activate the Gephi plugin:
-
-[gremlin-groovy]
-----
-:plugin use tinkerpop.gephi
-graph = TinkerFactory.createModern()
-:remote connect tinkerpop.gephi
-:> graph
-----
-
-The above Gremlin session activates the Gephi plugin, creates the "modern" `TinkerGraph`, uses the `:remote` command
-to setup a connection to the Graph Streaming server in Gephi (with default parameters that will be explained below),
-and then uses `:submit` which sends the vertices and edges of the graph to the Gephi Streaming Server. The resulting
-graph appears in Gephi as displayed in the left image below.
-
-image::gephi-graph-submit.png[width=800]
-
-NOTE: Issuing `:> graph` again will clear the Gephi workspace and then re-write the graph.  To manually empty the
-workspace do `:> clear`.
-
-Now that the graph is visualized in Gephi, it is possible to link:https://gephi.github.io/users/tutorial-layouts/[apply a layout algorithm],
-change the size and/or color of vertices and edges, and display labels/properties of interest.  Further information
-can be found in Gephi's tutorial on link:https://gephi.github.io/users/tutorial-visualization/[Visualization].
-After applying the Fruchterman Reingold layout, increasing the node size, decreasing the edge scale, and displaying
-the id, name, and weight attributes the graph looks as displayed in the right image above.
-
-Visualization of a `Traversal` has a different approach as the visualization occurs as the `Traversal` is executing,
-thus showing a real-time view of its execution.  A `Traversal` must be "configured" to operate in this format and for
-that it requires use of the `visualTraversal` option on the `config` function of the `:remote` command:
-
-[gremlin-groovy,modern]
-----
-:remote config visualTraversal graph                   <1>
-traversal = vg.V(2).in().out('knows').
-                    has('age',gt(30)).outE('created').
-                    has('weight',gt(0.5d)).inV();[]    <2>
-:> traversal                                           <3>
-----
-
-<1> Configure a "visual traversal" from your "graph" - this must be a `Graph` instance. This command will create a
-new `TraversalSource` called "vg" that must be used to visualize any spawned traversals in Gephi.
-<2> Define the traversal to be visualized. Note that ending the line with `;[]` simply prevents iteration of
-the traversal before it is submitted.
-<3> Submit the `Traversal` to visualize to Gephi.
-
-When the `:>` line is called, each step of the `Traversal` that produces or filters vertices generates events to
-Gephi. The events update the color and size of the vertices at that step with `startRGBColor` and `startSize`
-respectively. After the first step visualization, it sleeps for the configured `stepDelay` in milliseconds. On the
-second step, it decays the configured `colorToFade` of all the previously visited vertices in prior steps, by
-multiplying the current `colorToFade` value for each vertex with the `colorFadeRate`.  Setting the `colorFadeRate`
-value to `1.0` will prevent the color decay.  The screenshots below show how the visualization evolves over the four
-steps:
-
-image::gephi-traversal.png[width=1200]
-
-To get a sense of how the visualization configuration parameters affect the output, see the example below:
-
-[gremlin-groovy,modern]
-----
-:remote config startRGBColor [0.0,0.3,1.0]
-:remote config colorToFade b
-:remote config colorFadeRate 0.5
-:> traversal
-----
-
-image::gephi-traversal-config.png[width=400]
-
-The visualization configuration above starts with a blue color now (most recently visited), fading the blue color
-(so that dark green remains on oldest visited), and fading the blue color more quickly so that the gradient from dark
-green to blue across steps has higher contrast. The following table provides a more detailed description of the
-Gephi plugin configuration parameters as accepted via the `:remote config` command:
-
-[width="100%",cols="3,10,^2",options="header"]
-|=========================================================
-|Parameter |Description |Default
-|workspace |The name of the workspace that your Graph Streaming server is started for. |workspace1
-|host |The host URL where the Graph Streaming server is configured for. |localhost
-|port |The port number of the URL that the Graph Streaming server is listening on. |8080
-|sizeDecrementRate |The rate at which the size of an element decreases on each step of the visualization. |0.33
-|stepDelay |The amount of time in milliseconds to pause between step visualizations. |1000
-|startRGBColor |A size 3 float array of RGB color values which define the starting color to update most recently visited nodes with.  |[0.0,1.0,0.5]
-|startSize |The size an element should be when it is most recently visited. |20
-|colorToFade |A single char from the set `{r,g,b,R,G,B}` determining which color to fade for vertices visited in prior steps |g
-|colorFadeRate |A float value in the range `(0.0,1.0]` which is multiplied against the current `colorToFade` value for prior vertices; a `1.0` value effectively turns off the color fading of prior step visited vertices |0.7
-|visualTraversal |Creates a `TraversalSource` variable in the Console named `vg` which can be used for visualizing traversals. This configuration option takes two parameters.  The first is required and is the name of the `Graph` instance variable that will generate the `TraversalSource`.  The second parameter is the variable name that the `TraversalSource` should have when referenced in the Console.  If left unspecified, this value defaults to `vg`. |vg
-|=========================================================
-
-NOTE: This plugin is typically only useful to the Gremlin Console and is enabled in the there by default.
-
-The instructions above assume that the `Graph` instance being visualized is local to the Gremlin Console. It makes that
-assumption because the Gephi plugin requires a locally held `Graph`. If the intent is to visualize a `Graph` instance
-hosted in Gremlin Server or a TinkerPop-enabled graph that can only be connected to in a "remote" fashion, then it
-is still possible to use the Gephi plugin, but the requirement for a locally held `Graph` remains the same. To use
-the Gephi plugin in these situations simply use <<subgraph-step,subgraph()-step>> to extract the portion of the remote
-graph that will be visualized. Use of that step will return a `TinkerGraph` instance to the Gremlin Console at which
-point it can be used locally with the Gephi plugin. The following example demonstrates the general steps:
-
-[source,text]
-----
-gremlin> :remote connect tinkerpop.server conf/remote-objects.yaml <1>
-...
-gremlin> :> g.E().hasLabel('knows').subgraph('subGraph').cap('subGraph') <2>
-...
-gremlin> graph = result[0].object <3>
-...
-----
-
-<1> Be sure to connect with a serializer configured to return objects and not their `toString()` representation which
-is discussed in more detail in the <<connecting-via-console, Connecting Via Console>> Section.
-<2> Use the `:>` command to subgraph the remote graph as needed.
-<3> The `TinkerGraph` of that previous traversal can be found in the `result` object and now that the `Graph` is local
-to Gremlin Console it can be used with Gephi as shown in the prior instruction set.
 
 [[graph-plugins]]
 === Graph Plugins
