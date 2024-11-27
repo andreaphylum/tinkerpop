@@ -80,7 +80,7 @@ Gremlin-Hints: <hints>
   "g": string,
   "language" : string,
   "materializeProperties": string,
-  "bulked": boolean
+  "bulkResults": boolean
 }
 ----
 
@@ -141,7 +141,7 @@ the serializer specified by the `Content-Type` header. The following are the key
 |g |The name of the graph traversal source to which the query applies. Default: "g" |String containing traversal source name |No
 |language |The name of the ScriptEngine to use to parse the gremlin query. Default: "gremlin-lang" |String containing ScriptEngine name |No
 |materializeProperties |Whether to include all properties for results. One of "tokens" or "all". |String |No
-|bulked |Whether the result should be "bulked" (only applies to GraphBinary) |Boolean |No
+|bulkResults |Whether the results should be bulked by the server (only applies to GraphBinary) |Boolean |No
 |=========================================================
 
 === HTTP Response Format
